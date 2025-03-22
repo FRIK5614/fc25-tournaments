@@ -1,4 +1,3 @@
-// services/emailService.js
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
@@ -13,7 +12,16 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendMail(to, subject, text) {
-  await transporter.sendMail({ from: process.env.EMAIL_FROM, to, subject, text });
+  try {
+    await transporter.sendMail({ from: process.env.EMAIL_FROM, to, subject, text });
+    console.log(`✅ Email sent to ${to}`);
+  } catch (err) {
+    console.error('⚠️ Email send failed:', err.message);
+    // Не выбрасываем ошибку дальше — регистрация продолжит работать
+  }
 }
 
-module.exports = { sendMail };
+module.exports = {
+  sendMail,
+  sendEmail: sendMail
+};

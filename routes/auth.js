@@ -55,9 +55,9 @@ router.post('/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Неверный email или пароль' });
     }
-    if (!user.isVerified) {
-      return res.status(403).json({ error: 'Подтвердите email перед входом' });
-    }
+    // if (!user.isVerified) {
+    //   return res.status(403).json({ error: 'Подтвердите email перед входом' });
+    // }
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
     return res.status(200).json({ message: 'Вход выполнен успешно', token });
   } catch (error) {
@@ -66,50 +66,31 @@ router.post('/login', async (req, res) => {
   }
 });
 
-/**
- * Авторизация через Telegram.
- * Ожидается, что клиент отправит данные, полученные из Telegram login widget:
- * { id, first_name, last_name, username, photo_url, auth_date, hash }
- */
+// Telegram авторизация
 router.post('/telegramAuth', async (req, res) => {
   try {
-    const data = req.body; // данные из Telegram
+    const data = req.body;
     if (!data.id || !data.auth_date || !data.hash) {
       return res.status(400).json({ error: 'Неверные данные Telegram' });
     }
-
-    // Собираем строку данных (data_check_string) по рекомендациям Telegram
-    const checkParams = [];
-    for (const key in data) {
-      if (key !== 'hash') {
-        checkParams.push(`${key}=${data[key]}`);
-      }
-    }
-    checkParams.sort(); // сортируем в лексикографическом порядке
+    const checkParams = Object.keys(data).filter(k => k !== 'hash').sort().map(k => `${k}=${data[k]}`);
     const dataCheckString = checkParams.join('\n');
-
-    // Вычисляем секретный ключ: HMAC-SHA256 от пустой строки с ключом sha256(bot_token)
     const secretKey = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
     const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    if (hash !== data.hash) return res.status(403).json({ error: 'Неверная подпись данных Telegram' });
 
-    if (hash !== data.hash) {
-      return res.status(403).json({ error: 'Неверная подпись данных Telegram' });
-    }
-
-    // Находим пользователя по telegramId
     let user = await User.findOne({ telegramId: data.id });
     if (!user) {
-      // Если пользователь не найден, можно создать нового аккаунт с минимальными данными
       user = await User.create({
         username: data.username || data.first_name,
-        email: `${data.id}@telegram.com`, // генерируем фейковый email, можно доработать
+        email: `${data.id}@telegram.com`,
         phone: 'Не указан',
         country: 'Не указан',
         platform: 'Telegram',
         gamertag: data.username || data.first_name,
         password: await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10),
         telegramId: data.id,
-        isVerified: true // так как Telegram проверил данные
+        isVerified: true
       });
     }
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
@@ -120,10 +101,7 @@ router.post('/telegramAuth', async (req, res) => {
   }
 });
 
-/**
- * Авторизация через VK.
- * Эндпоинт /vkAuth перенаправляет пользователя на страницу авторизации VK.
- */
+// VK авторизация
 router.get('/vkAuth', (req, res) => {
   const clientId = process.env.VK_CLIENT_ID;
   const redirectUri = process.env.VK_REDIRECT_URI || 'http://localhost:3000/auth/vk/callback';
@@ -132,50 +110,19 @@ router.get('/vkAuth', (req, res) => {
   res.redirect(vkAuthUrl);
 });
 
-/**
- * Callback для VK авторизации.
- * Получает code, меняет его на access token, запрашивает данные пользователя, затем ищет или создает аккаунт.
- */
 router.get('/vk/callback', async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) return res.status(400).json({ error: 'Код авторизации отсутствует' });
-    
-    const clientId = process.env.VK_CLIENT_ID;
-    const clientSecret = process.env.VK_CLIENT_SECRET;
-    const redirectUri = process.env.VK_REDIRECT_URI || 'http://localhost:3000/auth/vk/callback';
-    
-    // Обмениваем код на access token
-    const tokenResponse = await axios.get('https://oauth.vk.com/access_token', {
-      params: {
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        code
-      }
-    });
-    
-    const { access_token, user_id, email } = tokenResponse.data;
-    if (!access_token || !user_id) {
-      return res.status(400).json({ error: 'Ошибка получения access token от VK' });
-    }
-    
-    // Запрашиваем данные пользователя через VK API
-    const userResponse = await axios.get('https://api.vk.com/method/users.get', {
-      params: {
-        user_ids: user_id,
-        fields: 'photo_100',
-        access_token,
-        v: '5.131'
-      }
-    });
-    
-    const vkUser = userResponse.data.response[0];
-    
-    // Ищем пользователя по vkId; предположим, что мы сохраняем vkId в поле telegramId или добавляем новое поле vkId
+    const { access_token, user_id, email } = (await axios.get('https://oauth.vk.com/access_token', {
+      params: { client_id: process.env.VK_CLIENT_ID, client_secret: process.env.VK_CLIENT_SECRET, redirect_uri: process.env.VK_REDIRECT_URI, code }
+    })).data;
+    const vkUser = (await axios.get('https://api.vk.com/method/users.get', {
+      params: { user_ids: user_id, fields: 'photo_100', access_token, v: '5.131' }
+    })).data.response[0];
+
     let user = await User.findOne({ vkId: user_id });
     if (!user) {
-      // Если пользователь не найден, создаём новый аккаунт с минимальными данными
       user = await User.create({
         username: vkUser.first_name,
         email: email || `${user_id}@vk.com`,
