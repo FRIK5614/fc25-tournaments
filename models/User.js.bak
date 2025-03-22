@@ -15,9 +15,13 @@ const userSchema = new mongoose.Schema({
   referredUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referredBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   telegramId:    { type: String },
-  isVerified:    { type: Boolean, default: false }
+  isVerified:    { type: Boolean, default: false },
+  isPhoneVerified: { type: Boolean, default: false },
+  phoneVerificationCode: { type: String },
+  phoneVerificationExpires: { type: Date }
 }, { timestamps: true });
 
+// Автоматическая генерация реферального кода, если он ещё не установлен
 userSchema.pre('save', function(next) {
   if (!this.referralCode) {
     this.referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();

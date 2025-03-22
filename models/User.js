@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema({
   referredUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referredBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   telegramId:    { type: String },
+  vkId:          { type: String }, // Добавлено поле для хранения идентификатора VK
   isVerified:    { type: Boolean, default: false },
   isPhoneVerified: { type: Boolean, default: false },
   phoneVerificationCode: { type: String },
