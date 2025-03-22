@@ -26,9 +26,8 @@ app.use('/leaderboard', require('./routes/leaderboard'));
 app.use('/referrals', require('./routes/referrals'));
 app.use('/export/users', require('./routes/exportUsers'));
 app.use('/passwordReset', require('./routes/passwordReset'));
-app.use('/telegramWebhook', require('./routes/telegramWebhook')); // добавлен новый маршрут
-app.use('/complaintsAdmin', require('./routes/complaintsAdmin'));
-
+app.use('/telegramWebhook', require('./routes/telegramWebhook'));
+app.use('/2fa', require('./routes/2fa')); // Подключение маршрута для двухфакторной аутентификации
 
 const { swaggerUi, swaggerSpec } = require('./swagger');
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

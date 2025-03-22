@@ -20,9 +20,13 @@ const userSchema = new mongoose.Schema({
   isPhoneVerified: { type: Boolean, default: false },
   phoneVerificationCode: { type: String },
   phoneVerificationExpires: { type: Date },
-  avatar:        { type: String }
+  avatar:        { type: String },
+  // Новые поля для двухфакторной аутентификации
+  twoFactorEnabled: { type: Boolean, default: false },
+  twoFactorSecret: { type: String }
 }, { timestamps: true });
 
+// Автоматическая генерация реферального кода, если он ещё не установлен
 userSchema.pre('save', function(next) {
   if (!this.referralCode) {
     this.referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();

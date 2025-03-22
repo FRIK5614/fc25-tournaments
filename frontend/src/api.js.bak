@@ -1,0 +1,22 @@
+// src/api.js
+const API_BASE = 'http://localhost:3000'; // измените при необходимости
+
+export async function login(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  return res.json();
+}
+
+export async function register(userData) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData)
+  });
+  return res.json();
+}
+
+// Добавьте другие методы: получение профиля, турниров, отправка результатов и т.д.

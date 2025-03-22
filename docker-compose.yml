@@ -1,26 +1,28 @@
+version: '3'
 services:
   fc25-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     ports:
       - "3000:3000"
     environment:
-      MONGODB_URI: ${MONGODB_URI}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
-      JWT_SECRET: ${JWT_SECRET}
-    dns:
-      - 8.8.8.8
+      - JWT_SECRET=${JWT_SECRET}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      # Добавьте другие переменные окружения, необходимые для бекенда
     depends_on:
       - fc25-mongo
 
-  fc25-mongo:
-    image: mongo:4.4
+  fc25-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "27018:27017"
-    volumes:
-      - mongo-data:/data/db
+      - "80:80"
+    depends_on:
+      - fc25-app
 
-volumes:
-  mongo-data:
+  fc25-mongo:
+    image: mongo:latest
+    volumes:
+      - ./data/db:/data/db
+    ports:
+      - "27017:27017"
