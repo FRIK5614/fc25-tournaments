@@ -1,19 +1,18 @@
-// routes/leaderboard.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 
-// GET /leaderboard — публичный топ‑10 игроков по рейтингу
+/**
+ * GET /leaderboard
+ * Возвращает список пользователей, отсортированных по рейтингу (от высокого к низкому)
+ */
 router.get('/', async (req, res) => {
   try {
-    const topPlayers = await User.find()
-      .sort({ rating: -1 })
-      .limit(10)
-      .select('username platform rating');
-    res.status(200).json(topPlayers);
+    // Выбираем только необходимые поля
+    const users = await User.find().sort({ rating: -1 }).select('username rating email');
+    res.json(users);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка получения лидеров' });
+    res.status(500).json({ message: err.message });
   }
 });
 
