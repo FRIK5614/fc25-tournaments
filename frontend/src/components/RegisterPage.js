@@ -1,6 +1,5 @@
-// src/components/RegisterPage.js
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { register } from '../api';
 
 function RegisterPage() {
@@ -15,7 +14,8 @@ function RegisterPage() {
     confirmPassword: ''
   });
   const [error, setError] = useState('');
-  const history = useHistory();
+
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData(prev => ({
@@ -26,15 +26,15 @@ function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if(formData.password !== formData.confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError('Пароли не совпадают');
       return;
     }
     try {
       const data = await register(formData);
-      if(data.message) {
+      if (data.message) {
         alert(data.message);
-        history.push('/login');
+        navigate('/login');
       } else {
         setError(data.error || 'Ошибка регистрации');
       }
