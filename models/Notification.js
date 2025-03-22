@@ -1,11 +1,11 @@
-// models/Notification.js
 const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const notificationSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, required: true },  // Например, "tournament", "complaint", "system"
+const NotificationSchema = new Schema({
+  user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   message: { type: String, required: true },
-  status: { type: String, enum: ['unread', 'read'], default: 'unread' }
+  type: { type: String, default: 'info' },
+  read: { type: Boolean, default: false }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Notification', notificationSchema);
+module.exports = mongoose.model('Notification', NotificationSchema);

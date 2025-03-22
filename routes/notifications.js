@@ -1,38 +1,30 @@
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
+const Notification = require('../models/Notification');
+const authenticate = require('../middleware/authenticate'); // Предполагается, что такой middleware уже существует
 
-// Настройка транспортера для nodemailer
-// Здесь используется пример с Gmail. Если у вас другой SMTP-сервер, измените настройки.
-let transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'maxim5614@gmail.com',        // замените на ваш email
-    pass: 'nhqe eiyu mshe gpsg'                   // замените на ваш пароль или app password для Gmail
+// GET /notifications — возвращает уведомления для текущего пользователя
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const notifications = await Notification.find({ user: req.userId }).sort({ createdAt: -1 });
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
-// Маршрут для отправки тестового уведомления
-router.post('/send', async (req, res) => {
+// PUT /notifications/:id/read — отмечает уведомление как прочитанное
+router.put('/:id/read', authenticate, async (req, res) => {
   try {
-    const { to, subject, text } = req.body;
-    if (!to || !subject || !text) {
-      return res.status(400).json({ error: 'to, subject and text fields are required' });
-    }
-    
-    let mailOptions = {
-      from: 'your.email@gmail.com',   // отправитель (тот же, что в транспортере)
-      to: to,                         // получатель
-      subject: subject,
-      text: text
-    };
-    
-    // Отправка письма
-    let info = await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: 'Email sent', info });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error sending email' });
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, user: req.userId },
+      { read: true },
+      { new: true }
+    );
+    if (!notification) return res.status(404).json({ message: 'Уведомление не найдено' });
+    res.json(notification);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
