@@ -19,9 +19,9 @@ const TournamentSchema = new Schema({
   players: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   matches: [MatchSchema],
   status: { type: String, enum: ['pending', 'in-progress', 'finished', 'cancelled'], default: 'pending' },
-  createdAt: { type: Date, default: Date.now },
+  isCalibration: { type: Boolean, default: false }, // true для калибровочных турниров (K = 40)
   finishedAt: { type: Date },
-  winner: { type: Schema.Types.ObjectId, ref: 'User' } // Поле для хранения победителя турнира
-});
+  winner: { type: Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
 
 module.exports = mongoose.model('Tournament', TournamentSchema);

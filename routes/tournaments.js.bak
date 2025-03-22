@@ -2,29 +2,37 @@ const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
 const User = require('../models/User');
+const emailService = require('../services/emailService');
+const telegramBot = require('../services/telegramBot');
 
-// Функция для расчёта итоговой статистики участников турнира.
-// Помимо очков и разницы мячей собираются количество сыгранных матчей и рейтинги соперников.
+/**
+ * Функция для расчёта итоговой статистики участников турнира.
+ * Для каждого игрока собираются:
+ *  - Очки (3 за победу, 1 за ничью)
+ *  - Суммарная разница мячей
+ *  - Количество сыгранных матчей
+ *  - Массив рейтингов соперников, с которыми игрок встречался
+ */
 async function calculateStandings(tournament) {
   const standingsMap = {};
-  // Инициализация данных для каждого участника
+  // Инициализируем данные для каждого участника турнира
   for (const playerId of tournament.players) {
     standingsMap[playerId.toString()] = {
       points: 0,
       goalDifference: 0,
       matchesCount: 0,
-      opponentsRatings: [] // Сюда складываем рейтинги соперников
+      opponentsRatings: [] // сюда будем складывать рейтинги соперников
     };
   }
 
-  // Обработка каждого матча турнира
+  // Проходим по каждому матчу, учитывая только подтверждённые
   for (const match of tournament.matches) {
     if (match.status === 'confirmed') {
-      // Увеличиваем количество матчей для обоих игроков
+      // Увеличиваем счетчик матчей для обоих игроков
       standingsMap[match.playerA.toString()].matchesCount++;
       standingsMap[match.playerB.toString()].matchesCount++;
 
-      // Получаем рейтинги соперников (предполагаем, что у каждого пользователя есть поле rating)
+      // Получаем рейтинги соперников
       const playerARating = (await User.findById(match.playerA)).rating;
       const playerBRating = (await User.findById(match.playerB)).rating;
 
@@ -53,7 +61,7 @@ async function calculateStandings(tournament) {
       ...standingsMap[userId]
     });
   }
-  // Сортируем участников по очкам, затем по разнице мячей (от лучшего к худшему)
+  // Сортировка: первично по очкам, вторично по разнице мячей (от лучшего к худшему)
   standings.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     return b.goalDifference - a.goalDifference;
@@ -62,12 +70,12 @@ async function calculateStandings(tournament) {
 }
 
 /**
- * Функция tryFinalize вызывается после подтверждения результата каждого матча.
+ * Функция tryFinalize – вызывается после подтверждения результата каждого матча.
  * Если все матчи турнира имеют статус 'confirmed', то:
  * 1. Вычисляется итоговая таблица.
- * 2. Определяется победитель (первый участник таблицы).
- * 3. Турнир переводится в статус 'finished', устанавливаются finishedAt и winner.
- * 4. Для каждого участника рассчитывается изменение рейтинга с использованием новой формулы:
+ * 2. Определяется победитель (участник, занявший 1-е место).
+ * 3. Турнир переводится в статус 'finished', в поле winner сохраняется ID победителя, устанавливается finishedAt.
+ * 4. Для каждого участника рассчитывается изменение рейтинга по формуле:
  *
  *    S = (N - rank) / (N - 1)
  *    Δ_strength = (AvgOpp - R_i) / 100
@@ -77,6 +85,8 @@ async function calculateStandings(tournament) {
  *    ΔR = K * P
  *
  * где a, b, c – весовые коэффициенты, K – базовая константа.
+ *
+ * 5. После обновления рейтинга отправляются уведомления по email и через Telegram (если доступны).
  */
 async function tryFinalize(tournament) {
   const allConfirmed = tournament.matches.every(match => match.status === 'confirmed');
@@ -101,7 +111,7 @@ async function tryFinalize(tournament) {
       const user = await User.findById(standing.userId);
       if (!user) continue;
 
-      // Определяем итоговое место (индекс + 1)
+      // Определяем итоговое место (rank = index + 1)
       const rank = index + 1;
       const S = (N - rank) / (N - 1);
 
@@ -120,6 +130,14 @@ async function tryFinalize(tournament) {
       // Обновляем рейтинг игрока
       user.rating = user.rating + deltaR;
       await user.save();
+
+      // Отправляем уведомления (если email и telegramId заданы)
+      if (user.email) {
+        await emailService.sendEmail(user.email, "Турнир завершён", `Ваш новый рейтинг: ${user.rating}`);
+      }
+      if (user.telegramId) {
+        await telegramBot.sendMessage(user.telegramId, `Турнир завершён. Ваш новый рейтинг: ${user.rating}`);
+      }
 
       console.log(`Пользователь ${user._id} (место ${rank}): S=${S.toFixed(2)}, Δ_strength=${deltaStrength.toFixed(2)}, Δ_goal=${deltaGoal.toFixed(2)}, ΔR=${deltaR.toFixed(2)}`);
     } catch (err) {
@@ -168,7 +186,7 @@ router.post('/:id/matches/:matchId/result', async (req, res) => {
     const match = tournament.matches.id(req.params.matchId);
     if (!match) return res.status(404).json({ message: "Матч не найден" });
 
-    // Проверка: текущий пользователь (req.userId) должен быть одним из игроков матча
+    // Проверка: текущий пользователь (req.userId) должен быть участником матча
     if (req.userId !== match.playerA.toString() && req.userId !== match.playerB.toString()) {
       return res.status(403).json({ message: "Вы не участвуете в этом матче" });
     }
@@ -250,7 +268,7 @@ router.post('/:id/matches/:matchId/dispute', async (req, res) => {
 // Эндпоинт: Решить спор (только для администратора)
 router.post('/:id/matches/:matchId/resolve', async (req, res) => {
   try {
-    // Проверка: только администратор может решать споры (требуется, чтобы req.user.role был 'admin')
+    // Проверка: только администратор может решать споры
     if (req.user.role !== 'admin') {
       return res.status(403).json({ message: "Только администратор может решать споры" });
     }
