@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Switch, Route, Link, Redirect } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import Dashboard from './components/Dashboard';
@@ -39,26 +39,14 @@ function App() {
           )}
         </nav>
 
-        <Switch>
-          <Route path="/login">
-            {token ? <Redirect to="/dashboard" /> : <LoginPage onLogin={handleLogin} />}
-          </Route>
-          <Route path="/register">
-            {token ? <Redirect to="/dashboard" /> : <RegisterPage />}
-          </Route>
-          <Route path="/dashboard">
-            {token ? <Dashboard /> : <Redirect to="/login" />}
-          </Route>
-          <Route path="/profile">
-            {token ? <ProfilePage /> : <Redirect to="/login" />}
-          </Route>
-          <Route path="/tournaments">
-            {token ? <TournamentPage /> : <Redirect to="/login" />}
-          </Route>
-          <Route path="/">
-            {token ? <Redirect to="/dashboard" /> : <LoginPage onLogin={handleLogin} />}
-          </Route>
-        </Switch>
+        <Routes>
+          <Route path="/login" element={ token ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={handleLogin} /> } />
+          <Route path="/register" element={ token ? <Navigate to="/dashboard" replace /> : <RegisterPage /> } />
+          <Route path="/dashboard" element={ token ? <Dashboard /> : <Navigate to="/login" replace /> } />
+          <Route path="/profile" element={ token ? <ProfilePage /> : <Navigate to="/login" replace /> } />
+          <Route path="/tournaments" element={ token ? <TournamentPage /> : <Navigate to="/login" replace /> } />
+          <Route path="/" element={ token ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={handleLogin} /> } />
+        </Routes>
       </div>
     </Router>
   );
