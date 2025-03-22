@@ -16,7 +16,7 @@ app.use('/email', require('./routes/emailNotifications'));
 app.use('/complaints', require('./routes/complaints'));
 app.use('/monetization', require('./routes/monetization'));
 app.use('/notifications/internal', require('./routes/notificationsInternal'));
-app.use('/notifications', require('./routes/notifications')); // Новый публичный маршрут уведомлений
+app.use('/notifications', require('./routes/notifications'));
 app.use('/reports', require('./routes/reports'));
 app.use('/playerStats', require('./routes/playerStats'));
 app.use('/audit', require('./routes/audit'));
@@ -26,6 +26,7 @@ app.use('/leaderboard', require('./routes/leaderboard'));
 app.use('/referrals', require('./routes/referrals'));
 app.use('/export/users', require('./routes/exportUsers'));
 app.use('/passwordReset', require('./routes/passwordReset'));
+app.use('/telegramWebhook', require('./routes/telegramWebhook')); // добавлен новый маршрут
 
 const { swaggerUi, swaggerSpec } = require('./swagger');
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
