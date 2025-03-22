@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Лобби турнира</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }
+    th { background: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <h1>Лобби турнира — Лидерборд</h1>
+  <table>
+    <thead>
+      <tr><th>Никнейм</th><th>Платформа</th><th>Рейтинг</th></tr>
+    </thead>
+    <tbody id="leaderboard"></tbody>
+  </table>
+
+  <script>
+    fetch('/leaderboard')
+      .then(res => res.json())
+      .then(players => {
+        const tbody = document.getElementById('leaderboard');
+        players.forEach(u => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${u.username}</td><td>${u.platform || '—'}</td><td>${u.rating}</td>`;
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(console.error);
+  </script>
+</body>
+</html>

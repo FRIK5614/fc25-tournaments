@@ -1,88 +1,58 @@
 // routes/complaints.js
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const Complaint = require('../models/Complaint');
 const User = require('../models/User');
 
-const JWT_SECRET = 'your_super_secret_key';
-
-// Middleware для проверки JWT
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-}
-
-// Маршрут для подачи жалобы (доступен для любого авторизованного пользователя)
-router.post('/', authenticateToken, async (req, res) => {
+// POST /complaints — создать новую жалобу
+router.post('/', async (req, res) => {
   try {
-    const { tournamentId, description } = req.body;
+    const { tournamentId, matchId, description, complainant } = req.body;
     if (!tournamentId || !description) {
       return res.status(400).json({ error: 'tournamentId и description обязательны' });
     }
-    
-    // Создаем новую жалобу
-    const newComplaint = new Complaint({
-      tournamentId,
-      complainant: req.user.id,
-      description
-    });
-    
-    await newComplaint.save();
-    return res.status(201).json({ message: 'Жалоба успешно подана', complaint: newComplaint });
+    const complaint = await Complaint.create({ tournamentId, matchId, description, complainant });
+    res.status(201).json(complaint);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    res.status(500).json({ error: 'Не удалось создать жалобу' });
   }
 });
 
-// Маршрут для получения всех жалоб (доступен только для администраторов)
-// Здесь для простоты используем проверку, что роль пользователя admin
-router.get('/', authenticateToken, async (req, res) => {
+// GET /complaints — получить все жалобы (только для админов)
+router.get('/', async (req, res) => {
   try {
-    // Получаем данные пользователя
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.headers['x-user-id']);
     if (!user || user.role !== 'admin') {
-      return res.status(403).json({ error: 'Доступ запрещен: требуется роль администратора' });
+      return res.status(403).json({ error: 'Доступ запрещён' });
     }
-    
-    const complaints = await Complaint.find().populate('tournamentId').populate('complainant');
-    return res.status(200).json(complaints);
+    const complaints = await Complaint.find()
+      .populate('complainant', 'username')
+      .populate('tournamentId', 'name');
+    res.json(complaints);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    res.status(500).json({ error: 'Ошибка получения жалоб' });
   }
 });
 
-// Маршрут для обновления статуса жалобы (только для администраторов)
-router.put('/:id', authenticateToken, async (req, res) => {
+// PUT /complaints/:id — обновить статус жалобы (только для админов)
+router.put('/:id', async (req, res) => {
   try {
-    const complaintId = req.params.id;
     const { status } = req.body;
-    if (!status || !['pending', 'reviewed', 'resolved'].includes(status)) {
-      return res.status(400).json({ error: 'Укажите корректный статус: pending, reviewed, или resolved' });
+    if (!['pending','reviewed','resolved'].includes(status)) {
+      return res.status(400).json({ error: 'Недопустимый статус' });
     }
-    
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.headers['x-user-id']);
     if (!user || user.role !== 'admin') {
-      return res.status(403).json({ error: 'Доступ запрещен: требуется роль администратора' });
+      return res.status(403).json({ error: 'Доступ запрещён' });
     }
-    
-    const complaint = await Complaint.findByIdAndUpdate(complaintId, { status }, { new: true });
-    if (!complaint) {
-      return res.status(404).json({ error: 'Жалоба не найдена' });
-    }
-    
-    return res.status(200).json({ message: 'Статус жалобы обновлен', complaint });
+    const complaint = await Complaint.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    if (!complaint) return res.status(404).json({ error: 'Жалоба не найдена' });
+    res.json(complaint);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    res.status(500).json({ error: 'Не удалось обновить жалобу' });
   }
 });
 
