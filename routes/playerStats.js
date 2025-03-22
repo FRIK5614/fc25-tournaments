@@ -1,53 +1,68 @@
-// routes/playerStats.js
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const Tournament = require('../models/Tournament');
+const authenticate = require('../middleware/authenticate');
 
-const JWT_SECRET = 'your_super_secret_key';
-
-// Middleware для проверки JWT
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-}
-
-// GET /playerStats
-// Возвращает статистику для текущего пользователя: общее количество турниров, завершённых турниров и количество побед (если он занял 1-е место в финальной таблице)
-router.get('/', authenticateToken, async (req, res) => {
+// GET /playerStats — возвращает статистику участника (текущего пользователя)
+router.get('/', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
-    // Находим турниры, в которых участвует текущий пользователь
-    const tournaments = await Tournament.find({ "players.userId": userId });
+    const userId = req.userId;
+    // Находим все турниры, где пользователь участвовал
+    const tournaments = await Tournament.find({ players: userId });
     
-    const totalParticipated = tournaments.length;
-    let finishedCount = 0;
+    let totalTournaments = tournaments.length;
+    let totalMatches = 0;
     let wins = 0;
-    
+    let draws = 0;
+    let losses = 0;
+    let goalsFor = 0;
+    let goalsAgainst = 0;
+
     tournaments.forEach(tournament => {
-      if (tournament.status === 'finished' && tournament.finalRanking && tournament.finalRanking.length > 0) {
-        finishedCount++;
-        // Если пользователь на первом месте, считаем как победу
-        if (tournament.finalRanking[0] === userId) {
-          wins++;
+      tournament.matches.forEach(match => {
+        if (match.status === 'confirmed') {
+          // Если пользователь участвует в матче
+          if (match.playerA.toString() === userId || match.playerB.toString() === userId) {
+            totalMatches++;
+            if (match.playerA.toString() === userId) {
+              goalsFor += match.scoreA;
+              goalsAgainst += match.scoreB;
+              if (match.scoreA > match.scoreB) {
+                wins++;
+              } else if (match.scoreA === match.scoreB) {
+                draws++;
+              } else {
+                losses++;
+              }
+            } else if (match.playerB.toString() === userId) {
+              goalsFor += match.scoreB;
+              goalsAgainst += match.scoreA;
+              if (match.scoreB > match.scoreA) {
+                wins++;
+              } else if (match.scoreB === match.scoreA) {
+                draws++;
+              } else {
+                losses++;
+              }
+            }
+          }
         }
-      }
+      });
     });
-    
+
     res.status(200).json({
-      totalParticipated,
-      finishedTournaments: finishedCount,
-      wins
+      totalTournaments,
+      totalMatches,
+      wins,
+      draws,
+      losses,
+      goalsFor,
+      goalsAgainst,
+      goalDifference: goalsFor - goalsAgainst
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка получения статистики' });
   }
 });
 
