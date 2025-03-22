@@ -1,0 +1,127 @@
+// routes/tournaments.js
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const Tournament = require('../models/Tournament');
+const User = require('../models/User');
+
+const JWT_SECRET = 'your_super_secret_key';
+function authenticateToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+let queue = [];
+
+router.post('/find', authenticateToken, async (req, res) => {
+  if (queue.includes(req.user.id)) return res.status(400).json({ error: 'Вы уже в очереди' });
+  queue.push(req.user.id);
+  if (queue.length < 4) return res.json({ message: 'Добавлены в очередь', position: queue.length });
+
+  const players = queue.splice(0, 4);
+  const matches = [];
+  for (let i = 0; i < 4; i++) {
+    for (let j = i + 1; j < 4; j++) {
+      matches.push({ playerA: players[i], playerB: players[j], status: 'pending' });
+    }
+  }
+  const tournament = await Tournament.create({ players: players.map(id => ({ userId: id })), matches, status: 'in-progress' });
+  res.status(201).json({ message: 'Турнир создан', tournament });
+});
+
+router.get('/:id', authenticateToken, async (req, res) => {
+  const tournament = await Tournament.findById(req.params.id)
+    .populate('players.userId matches.playerA matches.playerB');
+  if (!tournament) return res.status(404).json({ error: 'Турнир не найден' });
+  res.json(tournament);
+});
+
+router.post('/:id/matches/:matchId/result', authenticateToken, async (req, res) => {
+  const { scoreA, scoreB } = req.body;
+  if (scoreA == null || scoreB == null) return res.status(400).json({ error: 'scoreA и scoreB обязательны' });
+  const tournament = await Tournament.findById(req.params.id);
+  if (!tournament) return res.status(404).json({ error: 'Турнир не найден' });
+  const match = tournament.matches.id(req.params.matchId);
+  if (!match) return res.status(404).json({ error: 'Матч не найден' });
+  if (![match.playerA.toString(), match.playerB.toString()].includes(req.user.id)) return res.sendStatus(403);
+
+  match.scoreA = scoreA;
+  match.scoreB = scoreB;
+  await tournament.save();
+  res.json({ message: 'Результат сохранён', match });
+});
+
+router.post('/:id/matches/:matchId/confirm', authenticateToken, async (req, res) => {
+  const tournament = await Tournament.findById(req.params.id);
+  if (!tournament) return res.status(404).json({ error: 'Турнир не найден' });
+  const match = tournament.matches.id(req.params.matchId);
+  if (!match) return res.status(404).json({ error: 'Матч не найден' });
+  if (![match.playerA.toString(), match.playerB.toString()].includes(req.user.id)) return res.sendStatus(403);
+  if (match.scoreA == null || match.scoreB == null) return res.status(400).json({ error: 'Сначала отправьте результат' });
+
+  if (!match.confirmedBy.includes(req.user.id)) match.confirmedBy.push(req.user.id);
+  if (match.confirmedBy.length === 2) {
+    match.status = 'confirmed';
+    await tournament.save();
+    await tryFinalize(tournament);
+  } else {
+    await tournament.save();
+  }
+  res.json({ message: 'Подтверждено', match });
+});
+
+router.post('/:id/matches/:matchId/dispute', authenticateToken, async (req, res) => {
+  const { reason } = req.body;
+  if (!reason) return res.status(400).json({ error: 'Укажите причину спора' });
+
+  const tournament = await Tournament.findById(req.params.id);
+  if (!tournament) return res.status(404).json({ error: 'Турнир не найден' });
+  const match = tournament.matches.id(req.params.matchId);
+  if (!match) return res.status(404).json({ error: 'Матч не найден' });
+  if (![match.playerA.toString(), match.playerB.toString()].includes(req.user.id)) return res.sendStatus(403);
+
+  match.status = 'disputed';
+  match.dispute = { reason, filedBy: req.user.id, createdAt: new Date() };
+  await tournament.save();
+  res.json({ message: 'Спор создан — ожидается решение администратора', match });
+});
+
+router.get('/:id/standings', authenticateToken, async (req, res) => {
+  const tournament = await Tournament.findById(req.params.id);
+  if (!tournament) return res.status(404).json({ error: 'Турнир не найден' });
+
+  const stats = {};
+  tournament.players.forEach(p => stats[p.userId] = { userId: p.userId, points: 0, diff: 0 });
+  tournament.matches.forEach(m => {
+    if (m.status !== 'confirmed') return;
+    const a = m.playerA.toString(), b = m.playerB.toString();
+    stats[a].diff += m.scoreA - m.scoreB;
+    stats[b].diff += m.scoreB - m.scoreA;
+    if (m.scoreA > m.scoreB) stats[a].points += 3;
+    else if (m.scoreB > m.scoreA) stats[b].points += 3;
+    else { stats[a].points++; stats[b].points++; }
+  });
+
+  const users = await User.find({ _id: { $in: Object.keys(stats) } });
+  const standings = Object.values(stats).map(s => {
+    const user = users.find(u => u._id.toString() === s.userId.toString());
+    return { userId: s.userId, username: user.username, rating: user.rating, points: s.points, goalDifference: s.diff };
+  }).sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference);
+
+  res.json(standings);
+});
+
+async function tryFinalize(tournament) {
+  await tournament.populate('matches.playerA matches.playerB');
+  if (tournament.matches.every(m => m.status === 'confirmed')) {
+    tournament.status = 'finished';
+    await tournament.save();
+  }
+}
+
+module.exports = router;

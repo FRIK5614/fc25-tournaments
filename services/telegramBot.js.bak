@@ -1,0 +1,21 @@
+// services/telegramBot.js
+const TelegramBot = require('node-telegram-bot-api');
+
+const token = process.env.TELEGRAM_BOT_TOKEN;
+const chatId = process.env.TELEGRAM_CHAT_ID;
+
+if (!token || !chatId) {
+  console.error('❌ TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID не заданы в .env');
+}
+
+const bot = new TelegramBot(token, { polling: false });
+
+async function sendMessage(text) {
+  try {
+    await bot.sendMessage(chatId, text);
+  } catch (err) {
+    console.error('Ошибка при отправке Telegram‑уведомления:', err.message);
+  }
+}
+
+module.exports = { sendMessage };

@@ -1,0 +1,68 @@
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+const JWT_SECRET = 'your_super_secret_key';
+
+// Middleware для проверки JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+// Middleware для проверки, что пользователь имеет роль администратора
+async function isAdmin(req, res, next) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Доступ запрещен: требуется роль администратора' });
+    }
+    next();
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Получение списка всех пользователей (только для администраторов)
+router.get('/users', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const users = await User.find();
+    return res.status(200).json(users);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Обновление роли пользователя (только для администраторов)
+router.put('/users/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { role } = req.body;
+    if (!role) {
+      return res.status(400).json({ error: 'Укажите роль' });
+    }
+    const validRoles = ['player', 'moderator', 'security', 'admin'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Недопустимая роль' });
+    }
+    const user = await User.findByIdAndUpdate(userId, { role }, { new: true });
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    return res.status(200).json({ message: 'Роль обновлена', user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+module.exports = router;
