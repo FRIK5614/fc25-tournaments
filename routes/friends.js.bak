@@ -1,0 +1,17 @@
+// models/User.js
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  email:    { type: String, required: true, unique: true },
+  phone:    { type: String, required: true },
+  country:  { type: String, required: true },
+  platform: { type: String, required: true },
+  gamertag: { type: String, required: true },
+  password: { type: String, required: true },
+  rating:   { type: Number, default: 1000 },
+  role:     { type: String, enum: ['player', 'moderator', 'security', 'admin'], default: 'player' },
+  friends:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+}, { timestamps: true });
+
+module.exports = mongoose.model('User', userSchema);

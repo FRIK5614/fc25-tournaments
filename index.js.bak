@@ -1,0 +1,104 @@
+// index.js
+const Sentry = require('@sentry/node');
+Sentry.init({
+  dsn: 'https://3c0c49d6c1a8430052637b227182e28d@o4509011678593024.ingest.us.sentry.io/4509011684229120', // Замените на ваш DSN
+  tracesSampleRate: 1.0,
+});
+
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const logger = require('./middleware/logger');
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Подключаем планировщик турниров (если он есть)
+require('./tournamentScheduler');
+
+// Подключение к MongoDB
+require('./db');
+
+// Middleware для парсинга JSON
+app.use(express.json());
+
+// Подключение маршрутов
+const authRoutes = require('./routes/auth');
+app.use('/auth', authRoutes);
+
+const tournamentRoutes = require('./routes/tournaments');
+app.use('/tournaments', tournamentRoutes);
+
+const adminRoutes = require('./routes/admin');
+app.use('/admin', adminRoutes);
+
+const notificationsRoutes = require('./routes/notifications');
+app.use('/notifications', notificationsRoutes);
+
+const complaintsRoutes = require('./routes/complaints');
+app.use('/complaints', complaintsRoutes);
+
+const monetizationRoutes = require('./routes/monetization');
+app.use('/monetization', monetizationRoutes);
+
+const profileRoutes = require('./routes/profile');
+app.use('/profile', profileRoutes);
+
+const notificationsInternalRoutes = require('./routes/notificationsInternal');
+app.use('/notifications/internal', notificationsInternalRoutes);
+
+const reportsRoutes = require('./routes/reports');
+app.use('/reports', reportsRoutes);
+
+const playerStatsRoutes = require('./routes/playerStats');
+app.use('/playerStats', playerStatsRoutes);
+
+const auditRoutes = require('./routes/audit');
+app.use('/audit', auditRoutes);
+
+const friendsRoutes = require('./routes/friends');
+app.use('/friends', friendsRoutes);
+
+const achievementsRoutes = require('./routes/achievements');
+app.use('/achievements', achievementsRoutes);
+
+const leaderboardRoutes = require('./routes/leaderboard');
+app.use('/leaderboard', leaderboardRoutes);
+
+const referralsRoutes = require('./routes/referrals');
+app.use('/referrals', referralsRoutes);
+
+const telegramNotificationsRoutes = require('./routes/telegramNotifications');
+app.use('/telegram', telegramNotificationsRoutes);
+
+const exportRoutes = require('./routes/export');
+app.use('/export', exportRoutes);
+
+// Подключение документации Swagger
+const { swaggerUi, swaggerSpec } = require('./swagger');
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+app.get('/', (req, res) => {
+  res.send('Добро пожаловать на платформу FC25 турниров!');
+});
+
+// Создаем HTTP-сервер и интегрируем Socket.IO
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+app.locals.io = io;
+
+io.on('connection', (socket) => {
+  logger.info('Новый пользователь подключился через Socket.IO');
+  socket.on('chat message', (msg) => {
+    logger.info('Сообщение: ' + msg);
+    io.emit('chat message', msg);
+  });
+  socket.on('disconnect', () => {
+    logger.info('Пользователь отключился');
+  });
+});
+
+server.listen(port, () => {
+  logger.info(`Сервер запущен на http://localhost:${port}`);
+});

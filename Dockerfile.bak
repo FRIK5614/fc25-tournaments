@@ -1,0 +1,25 @@
+FROM node:16-slim
+
+# Рабочая директория в контейнере
+WORKDIR /app
+
+# Заставляем npm собирать модули из исходников
+ENV npm_config_build_from_source=true
+
+# Устанавливаем необходимые сборочные инструменты
+RUN apt-get update && apt-get install -y python3 make gcc g++ && rm -rf /var/lib/apt/lists/*
+
+# Копируем файлы package.json и package-lock.json
+COPY package*.json ./
+
+# Устанавливаем зависимости (bcrypt соберётся из исходников)
+RUN npm install
+
+# Копируем оставшийся исходный код
+COPY . .
+
+# Открываем порт приложения (если требуется)
+EXPOSE 3000
+
+# Запускаем приложение
+CMD ["npm", "start"]

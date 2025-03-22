@@ -1,0 +1,9 @@
+// middleware/sentry.js
+const Sentry = require('@sentry/node');
+
+Sentry.init({
+  dsn: 'YOUR_SENTRY_DSN', // Замените на ваш DSN, полученный из Sentry
+  tracesSampleRate: 1.0,  // Настройте по необходимости (1.0 означает 100% трассировки)
+});
+
+module.exports = Sentry;

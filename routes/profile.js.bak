@@ -1,0 +1,73 @@
+// routes/profile.js
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const User = require('../models/User');
+
+const JWT_SECRET = 'your_super_secret_key';
+
+// Middleware для проверки JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+// Настройка Multer для загрузки аватара
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads/avatars'));
+  },
+  filename: (req, file, cb) => {
+    // Генерируем уникальное имя: время + оригинальное имя файла
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
+
+// GET /profile – получение данных текущего пользователя
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password'); // не возвращаем пароль
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// PUT /profile – обновление данных профиля (с опциональной загрузкой аватара)
+router.put('/', authenticateToken, upload.single('avatar'), async (req, res) => {
+  try {
+    const updateFields = {};
+    // Поля для обновления можно передавать в body
+    if (req.body.username) updateFields.username = req.body.username;
+    if (req.body.phone) updateFields.phone = req.body.phone;
+    if (req.body.country) updateFields.country = req.body.country;
+    if (req.body.platform) updateFields.platform = req.body.platform;
+    if (req.body.gamertag) updateFields.gamertag = req.body.gamertag;
+    // Если файл аватара загружен, сохраняем путь к нему
+    if (req.file) {
+      updateFields.avatar = req.file.path;
+    }
+    
+    const user = await User.findByIdAndUpdate(req.user.id, updateFields, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    
+    res.status(200).json({ message: 'Профиль обновлён', user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+module.exports = router;

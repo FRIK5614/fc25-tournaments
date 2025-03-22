@@ -1,0 +1,61 @@
+// routes/export.js
+const express = require('express');
+const router = express.Router();
+const { Parser } = require('json2csv');
+const Tournament = require('../models/Tournament');
+const User = require('../models/User');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key';
+
+function authenticateToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  next();
+}
+
+router.get('/users', authenticateToken, async (req, res) => {
+  const users = await User.find().select('username email phone country platform gamertag rating role').lean();
+  const csv = new Parser({ fields: ['username','email','phone','country','platform','gamertag','rating','role'] }).parse(users);
+  res.header('Content-Type','text/csv');
+  res.attachment('users.csv');
+  res.send(csv);
+});
+
+router.get('/tournaments', authenticateToken, async (req, res) => {
+  const tournaments = await Tournament.find().populate('players.userId','username email').lean();
+  const data = tournaments.map(t => ({
+    id: t._id, status: t.status, startTime: t.startTime,
+    playersCount: t.players.length, matchesCount: t.matches?.length||0, resultsCount: t.results?.length||0
+  }));
+  const csv = new Parser({ fields: ['id','status','startTime','playersCount','matchesCount','resultsCount'] }).parse(data);
+  res.header('Content-Type','text/csv');
+  res.attachment('tournaments.csv');
+  res.send(csv);
+});
+
+router.get('/tournaments/:id/csv', authenticateToken, async (req, res) => {
+  const tournament = await Tournament.findById(req.params.id).lean();
+  if (!tournament) return res.status(404).json({ error:'Tournament not found' });
+  const stats = {};
+  tournament.players.forEach(p => stats[p.userId] = { points:0, diff:0 });
+  tournament.matches.forEach(m => {
+    if (m.status!=='confirmed') return;
+    const a = m.playerA.toString(), b = m.playerB.toString();
+    stats[a].diff += m.scoreA - m.scoreB;
+    stats[b].diff += m.scoreB - m.scoreA;
+    if (m.scoreA>m.scoreB) stats[a].points+=3;
+    else if (m.scoreB>m.scoreA) stats[b].points+=3;
+    else { stats[a].points++; stats[b].points++; }
+  });
+  const users = await User.find({ _id: { $in: Object.keys(stats) } });
+  const data = Object.values(stats).map(s => {
+    const user = users.find(u => u._id.toString()===s.userId.toString());
+    return { Username:user.username, Rating:user.rating, Points:s.points, GoalDifference:s.diff };
+  });
+  const csv = new Parser({ fields: ['Username','Rating','Points','GoalDifference'] }).parse(data);
+  res.header('Content-Type','text/csv');
+  res.attachment(`tournament-${req.params.id}-standings.csv`);
+  res.send(csv);
+});
+
+module.exports = router;
