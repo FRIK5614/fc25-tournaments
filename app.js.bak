@@ -25,6 +25,7 @@ app.use('/achievements', require('./routes/achievements'));
 app.use('/leaderboard', require('./routes/leaderboard'));
 app.use('/referrals', require('./routes/referrals'));
 app.use('/export/users', require('./routes/exportUsers'));
+app.use('/passwordReset', require('./routes/passwordReset'));
 
 const { swaggerUi, swaggerSpec } = require('./swagger');
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

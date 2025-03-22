@@ -7,20 +7,19 @@ const userSchema = new mongoose.Schema({
   country:       { type: String, required: true },
   platform:      { type: String, required: true },
   gamertag:      { type: String, required: true },
-  password:      { type: String, required: true }, // хранится хэш пароля
+  password:      { type: String, required: true },
   rating:        { type: Number, default: 1000 },
-  role:          { type: String, enum: ['player', 'moderator', 'security', 'admin'], default: 'player' },
+  role:          { type: String, enum: ['player','moderator','security','admin'], default: 'player' },
   friends:       [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referralCode:  { type: String, unique: true },
   referredUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referredBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  telegramId:    { type: String } // добавлено поле для Telegram уведомлений
+  telegramId:    { type: String },
+  isVerified:    { type: Boolean, default: false }
 }, { timestamps: true });
 
-// Автоматическая генерация реферального кода, если он ещё не установлен
 userSchema.pre('save', function(next) {
   if (!this.referralCode) {
-    // Простой способ: генерируем случайный 6-символьный код
     this.referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
   }
   next();
